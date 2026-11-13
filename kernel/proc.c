@@ -145,6 +145,13 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  // I added this too for A2 :D
+  // initialize MLFQ and stats fields
+  p->runticks  = 0;
+  p->nsched    = 0;
+  p->ctime     = ticks; // read without tickslock (see spec)
+  p->level     = 0;     // new processes start at level 0
+  p->useticks  = 0;
 
   return p;
 }
@@ -168,6 +175,12 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  // I added this for A2 :D
+  p->runticks  = 0;
+  p->nsched    = 0;
+  p->ctime     = 0;
+  p->level     = 0;
+  p->useticks  = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -450,6 +463,7 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        p->nsched++;
         swtch(&c->context, &p->context);
 
         // Don't re-enable interrupts on release.

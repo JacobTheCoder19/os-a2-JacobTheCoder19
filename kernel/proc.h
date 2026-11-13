@@ -101,4 +101,12 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // I added this for A2
+  // MLFQ scheduling fields
+  int runticks;   // timer ticks charged to this process
+  int nsched;     // times scheduler() switched to this process
+  int ctime;      // tick when process was created
+  int level;      // current MLFQ level, 0..3
+  int useticks;   // ticks used at current level
 };

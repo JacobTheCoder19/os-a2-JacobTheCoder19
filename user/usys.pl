@@ -43,3 +43,5 @@ entry("sbrk");
 entry("pause");
 entry("uptime");
 entry("sync");
+# Added this for A2 :D
+entry("getpinfo");

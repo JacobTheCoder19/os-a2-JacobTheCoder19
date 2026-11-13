@@ -6,6 +6,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "vm.h"
+// Added this for A2 :D
+#include "pinfo.h"
 
 uint64
 sys_exit(void)
@@ -109,4 +111,51 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// Added this for A2 :D
+uint64
+sys_getpinfo(void)
+{
+  uint64 addr;
+  int max;
+  argaddr(0, &addr);
+  argint(1, &max);
+
+  if (max < 0)
+    return -1;
+
+  struct proc *p;
+  int count = 0;
+  struct proc *curproc = myproc();
+  extern struct proc proc[];
+
+  for (p = proc; p < &proc[NPROC] && count < max; p++) {
+    acquire(&p->lock);
+
+    if (p->state == UNUSED) {
+      release(&p->lock);
+      continue;
+    }
+
+    struct pinfo pi;
+    pi.pid      = p->pid;
+    pi.state    = p->state;
+    pi.level    = p->level;
+    pi.runticks = p->runticks;
+    pi.nsched   = p->nsched;
+    pi.ctime    = p->ctime;
+    memmove(pi.name, p->name, sizeof(p->name));
+
+    release(&p->lock);
+
+    if (copyout(curproc->pagetable, curproc->sz,
+                addr + count * sizeof(struct pinfo),
+                (char *)&pi, sizeof(pi)) < 0)
+      return -1;
+
+    count++;
+  }
+
+  return count;
 }

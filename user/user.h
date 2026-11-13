@@ -1,6 +1,8 @@
 #define SBRK_ERROR ((char *)-1)
 
 struct stat;
+// Added for A2
+struct pinfo;
 
 // system calls
 int fork(void);
@@ -25,6 +27,8 @@ char *sys_sbrk(int, int);
 int pause(int);
 int uptime(void);
 int sync(void);
+// Added for A2 :D
+int getpinfo(struct pinfo*, int);
 
 // ulib.c
 int stat(const char *, struct stat *);

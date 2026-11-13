@@ -81,9 +81,14 @@ usertrap(void)
   if (killed(p))
     kexit(-1);
 
-  // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2)
+    // Added this for A2 2 >:D
+    // give up the CPU if this is a timer interrupt.
+  if (which_dev == 2) {
+    acquire(&p->lock);
+    p->runticks++;
+    release(&p->lock);
     yield();
+  }
 
   prepare_return();
 
@@ -153,9 +158,15 @@ kerneltrap()
     panic("kerneltrap");
   }
 
+  // Guess what, I added this for A2 as well :D
   // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2 && myproc() != 0)
+  if (which_dev == 2 && myproc() != 0) {
+    struct proc *p = myproc();
+    acquire(&p->lock);
+    p->runticks++;
+    release(&p->lock);
     yield();
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

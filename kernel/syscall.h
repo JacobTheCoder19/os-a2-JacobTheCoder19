@@ -21,3 +21,5 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_sync   22
+// Added this for A2 :D
+#define SYS_getpinfo 23
