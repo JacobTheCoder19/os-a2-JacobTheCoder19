@@ -78,16 +78,17 @@ usertrap(void)
     setkilled(p);
   }
 
-  if (killed(p))
+    if (killed(p))
     kexit(-1);
 
-    // Added this for A2 2 >:D
-    // give up the CPU if this is a timer interrupt.
+  // Added this for A2 :D
   if (which_dev == 2) {
     acquire(&p->lock);
     p->runticks++;
+    int should_yield = mlfq_tick(p);
     release(&p->lock);
-    yield();
+    if (should_yield)
+      yield();
   }
 
   prepare_return();
@@ -159,14 +160,15 @@ kerneltrap()
   }
 
   // Guess what, I added this for A2 as well :D
-  // give up the CPU if this is a timer interrupt.
   if (which_dev == 2 && myproc() != 0) {
     struct proc *p = myproc();
     acquire(&p->lock);
     p->runticks++;
+    int should_yield = mlfq_tick(p);
     release(&p->lock);
-    yield();
-  }
+    if (should_yield)
+      yield();
+}
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
@@ -180,13 +182,23 @@ clockintr()
   if (cpuid() == 0) {
     acquire(&tickslock);
     ticks++;
+    // Added for A2 to prevent starvation :)
+    // MLFQ boost: every 64 ticks, move all processes to level 0
+    if (ticks % 64 == 0) {
+      extern struct proc proc[];
+      struct proc *p;
+      for (p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if (p->state != UNUSED) {
+          p->level = 0;
+          p->useticks = 0;
+        }
+        release(&p->lock);
+      }
+    }
     wakeup(&ticks);
     release(&tickslock);
   }
-
-  // ask for the next timer interrupt. this also clears
-  // the interrupt request. 1000000 is about a tenth
-  // of a second.
   w_stimecmp(r_time() + 1000000);
 }
 

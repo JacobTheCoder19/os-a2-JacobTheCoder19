@@ -15,6 +15,12 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+// Added for A2 >:D
+// MLFQ per-level cursors (index of last chosen proc slot)
+static int mlfq_cursor[4];
+// MLFQ time slices per level (in ticks)
+static int mlfq_slice[4] = {1, 2, 4, 8};
+
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -438,6 +444,42 @@ kwait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
+
+// ADDED FOR A2 LETS GOO :D
+// Called on every timer tick while process p is running.
+// Returns 1 if p should yield the CPU, 0 if it should keep running.
+// Must be called with p->lock held.
+int
+mlfq_tick(struct proc *p)
+{
+  // charge one tick to this process at its current level
+  p->useticks++;
+
+  // check if slice is used up → demote and yield
+  if (p->useticks >= mlfq_slice[p->level]) {
+    // demote (level 3 stays at 3)
+    if (p->level < 3)
+      p->level++;
+    p->useticks = 0;
+    return 1; // yield
+  }
+
+  // slice not used up — check if a higher priority level
+  // has a RUNNABLE process (preempt for higher levels)
+  for (int lv = 0; lv < p->level; lv++) {
+    struct proc *q;
+    for (q = proc; q < &proc[NPROC]; q++) {
+      if (q->state == RUNNABLE && q->level == lv)
+        return 1; // yield without resetting useticks
+    }
+  }
+
+  return 0; // keep running
+}
+// END FOR A2
+
+// Added a new scheduler function for A2 :D
 void
 scheduler(void)
 {
@@ -446,38 +488,37 @@ scheduler(void)
 
   c->proc = 0;
   for (;;) {
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
     intr_off();
 
     int found = 0;
-    for (p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        p->nsched++;
-        swtch(&c->context, &p->context);
 
-        // Don't re-enable interrupts on release.
-        mycpu()->intena = 0;
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
+    // MLFQ: pick highest priority level that has a RUNNABLE process
+    for (int lv = 0; lv < 4 && !found; lv++) {
+      int start = mlfq_cursor[lv];
+      int i = start;
+      do {
+        p = &proc[i];
+        acquire(&p->lock);
+        if (p->state == RUNNABLE && p->level == lv) {
+          // found a process to run
+          mlfq_cursor[lv] = i; // update cursor
+          p->state = RUNNING;
+          c->proc = p;
+          p->nsched++;
+          swtch(&c->context, &p->context);
+          mycpu()->intena = 0;
+          c->proc = 0;
+          found = 1;
+          release(&p->lock);
+          break;
+        }
+        release(&p->lock);
+        i = (i + 1) % NPROC;
+      } while (i != start);
     }
+
     if (found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
     }
   }
